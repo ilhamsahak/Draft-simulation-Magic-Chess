@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react"
 import { useParams } from "react-router-dom"
 import { db, auth } from "../firebase"
-import { doc, onSnapshot, updateDoc } from "firebase/firestore"
+import {
+  doc,
+  onSnapshot,
+  updateDoc,
+  arrayUnion
+} from "firebase/firestore"
 import { getDraftSteps } from "../draftSteps"
 import { commanders } from "../commanders"
 
@@ -9,6 +14,7 @@ export default function Room() {
   const { code } = useParams()
   const [room, setRoom] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [chatInput, setChatInput] = useState("")
 
   // =========================
   // FIRESTORE SUBSCRIBE
@@ -70,7 +76,8 @@ export default function Room() {
         picks: { A: [], B: [] },
         startedAt: Date.now(),
         turnStartedAt: Date.now()
-      }
+      },
+      chat: []
     })
   }
 
@@ -125,6 +132,25 @@ export default function Room() {
   }
 
   // =========================
+  // CHAT
+  // =========================
+  const sendMessage = async () => {
+    if (!chatInput.trim()) return
+
+    await updateDoc(doc(db, "rooms", code), {
+      chat: arrayUnion({
+        uid: auth.currentUser.uid,
+        name: user?.name || "Unknown",
+        role: user?.role || "spectator",
+        message: chatInput,
+        timestamp: Date.now()
+      })
+    })
+
+    setChatInput("")
+  }
+
+  // =========================
   // HELPERS
   // =========================
   const getCommanderName = (id) =>
@@ -134,101 +160,120 @@ export default function Room() {
   // UI
   // =========================
   return (
-    <div style={{ padding: 20 }}>
-      {/* Room Code */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <h2 style={{ margin: 0 }}>Room Code: {code}</h2>
-        <button onClick={copyRoomCode}>📋 Copy</button>
-        {copied && <span style={{ color: "green" }}>✔ Copied</span>}
-      </div>
+    <div style={{ padding: 20, display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20 }}>
+      {/* LEFT: DRAFT */}
+      <div>
+        {/* Room Code */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <h2 style={{ margin: 0 }}>Room Code: {code}</h2>
+          <button onClick={copyRoomCode}>📋 Copy</button>
+          {copied && <span style={{ color: "green" }}>✔ Copied</span>}
+        </div>
 
-      {/* ================= LOBBY ================= */}
-      {room.status === "lobby" && (
-        <>
-          <h3>Lobby</h3>
+        {/* LOBBY */}
+        {room.status === "lobby" && (
+          <>
+            <h3>Lobby</h3>
+            <ul>
+              {Object.entries(room.users).map(([uid, u]) => (
+                <li key={uid}>
+                  <strong>{u.name}</strong> — {u.role}{" "}
+                  {u.ready ? "✅ Ready" : "❌ Not Ready"}
+                </li>
+              ))}
+            </ul>
 
-          <ul>
-            {Object.entries(room.users).map(([uid, u]) => (
-              <li key={uid}>
-                <strong>{u.name}</strong> — {u.role}{" "}
-                {u.ready ? "✅ Ready" : "❌ Not Ready"}
-              </li>
-            ))}
-          </ul>
+            {user && user.role !== "spectator" && (
+              <button onClick={toggleReady}>
+                {user.ready ? "Unready" : "Ready"}
+              </button>
+            )}
 
-          {user && user.role !== "spectator" && (
-            <button onClick={toggleReady}>
-              {user.ready ? "Unready" : "Ready"}
-            </button>
-          )}
+            {allReady && user?.role === "referee" && (
+              <div style={{ marginTop: 20 }}>
+                <button onClick={startDraft}>🚀 Start Draft</button>
+              </div>
+            )}
+          </>
+        )}
 
-          {allReady && user?.role === "referee" && (
-            <div style={{ marginTop: 20 }}>
-              <button onClick={startDraft}>🚀 Start Draft</button>
-            </div>
-          )}
-        </>
-      )}
+        {/* DRAFT */}
+        {room.status === "draft" && (
+          <>
+            <h3>Draft Phase</h3>
+            {currentTurn && <h4>Current Turn: {currentTurn}</h4>}
 
-      {/* ================= DRAFT ================= */}
-      {room.status === "draft" && (
-        <>
-          <h3 style={{ marginTop: 30 }}>Draft Phase</h3>
+            <h4>Bans</h4>
+            <ul>
+              {draft.bans.map((b, i) => (
+                <li key={i}>
+                  Team {b.team} banned {getCommanderName(b.commanderId)}
+                </li>
+              ))}
+            </ul>
 
-          {currentTurn && <h4>Current Turn: {currentTurn}</h4>}
-
-          {/* BANS */}
-          <h4>Bans</h4>
-          {draft.bans.length === 0 && <p>No bans yet</p>}
-          <ul>
-            {draft.bans.map((b, i) => (
-              <li key={i}>
-                <strong>Team {b.team}</strong> banned{" "}
-                {getCommanderName(b.commanderId)}
-              </li>
-            ))}
-          </ul>
-
-          {/* PICKS */}
-          <h4>Picks</h4>
-
-          <div>
+            <h4>Picks</h4>
             <strong>Team A</strong>
             <ul>
-              {draft.picks.A.length === 0 && <li>No picks yet</li>}
               {draft.picks.A.map((id, i) => (
                 <li key={i}>{getCommanderName(id)}</li>
               ))}
             </ul>
-          </div>
 
-          <div>
             <strong>Team B</strong>
             <ul>
-              {draft.picks.B.length === 0 && <li>No picks yet</li>}
               {draft.picks.B.map((id, i) => (
                 <li key={i}>{getCommanderName(id)}</li>
               ))}
             </ul>
-          </div>
 
-          {/* ACTION BUTTONS */}
-          {user && user.role === currentStep?.team && (
-            <div style={{ marginTop: 20 }}>
-              <p>Select a commander:</p>
-              {commanders.map((cmd) => (
-                <button
-                  key={cmd.id}
-                  style={{ margin: 5 }}
-                  onClick={() => performAction(cmd.id)}
-                >
-                  {cmd.name}
-                </button>
-              ))}
+            {user && user.role === currentStep?.team && (
+              <div style={{ marginTop: 20 }}>
+                <p>Select a commander:</p>
+                {commanders.map((cmd) => (
+                  <button
+                    key={cmd.id}
+                    style={{ margin: 5 }}
+                    onClick={() => performAction(cmd.id)}
+                  >
+                    {cmd.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* RIGHT: CHAT */}
+      <div style={{ borderLeft: "1px solid #333", paddingLeft: 15 }}>
+        <h3>Room Chat</h3>
+
+        <div style={{ maxHeight: 300, overflowY: "auto", marginBottom: 10 }}>
+          {(room.chat || []).map((c, i) => (
+            <div key={i} style={{ marginBottom: 6 }}>
+              <strong>{c.name}</strong>{" "}
+              <span style={{ fontSize: 12, color: "#888" }}>
+                ({c.role})
+              </span>
+              <br />
+              <span>{c.message}</span>
             </div>
-          )}
-        </>
-      )}
+          ))}
+        </div>
+
+        <input
+          placeholder="Type a message..."
+          value={chatInput}
+          onChange={(e) => setChatInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+          style={{ width: "100%" }}
+        />
+
+        <button onClick={sendMessage} style={{ marginTop: 5 }}>
+          Send
+        </button>
+      </div>
     </div>
   )
 }
