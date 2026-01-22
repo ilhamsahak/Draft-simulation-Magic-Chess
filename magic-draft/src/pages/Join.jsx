@@ -6,16 +6,16 @@ import { useNavigate } from "react-router-dom"
 export default function Join() {
   const [name, setName] = useState("")
   const [team, setTeam] = useState("A")
-  const [roomCode, setRoomCode] = useState("")
+  const [code, setCode] = useState("")
   const navigate = useNavigate()
 
   const joinRoom = async () => {
-    if (!name || !roomCode) {
+    if (!name || !code) {
       alert("Please fill all fields")
       return
     }
 
-    const roomRef = doc(db, "rooms", roomCode.toUpperCase())
+    const roomRef = doc(db, "rooms", code.toUpperCase())
     const snap = await getDoc(roomRef)
 
     if (!snap.exists()) {
@@ -25,13 +25,13 @@ export default function Join() {
 
     const room = snap.data()
 
-    // 🔒 Check if team already taken
+    // Prevent overwriting team
     const teamTaken = Object.values(room.users || {}).some(
-      (u) => u.role === team
+      u => u.role === team
     )
 
     if (teamTaken) {
-      alert(`Team ${team} is already taken`)
+      alert(`Team ${team} already taken`)
       return
     }
 
@@ -44,22 +44,22 @@ export default function Join() {
       }
     })
 
-    navigate(`/room/${roomCode}`)
+    navigate(`/room/${code}`)
   }
 
   return (
-    <div style={{ padding: 40 }}>
+    <div style={{ padding: 20 }}>
       <h2>Join Draft Room</h2>
 
       <input
         placeholder="Your alias / team name"
         value={name}
-        onChange={(e) => setName(e.target.value)}
+        onChange={e => setName(e.target.value)}
       />
 
       <br /><br />
 
-      <select value={team} onChange={(e) => setTeam(e.target.value)}>
+      <select value={team} onChange={e => setTeam(e.target.value)}>
         <option value="A">Team A</option>
         <option value="B">Team B</option>
       </select>
@@ -67,9 +67,9 @@ export default function Join() {
       <br /><br />
 
       <input
-        placeholder="Room code"
-        value={roomCode}
-        onChange={(e) => setRoomCode(e.target.value)}
+        placeholder="Room Code"
+        value={code}
+        onChange={e => setCode(e.target.value)}
       />
 
       <br /><br />

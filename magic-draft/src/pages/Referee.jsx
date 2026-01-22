@@ -12,7 +12,7 @@ export default function Referee() {
   const navigate = useNavigate()
 
   const createRoom = async () => {
-    if (!name) {
+    if (!name.trim()) {
       alert("Please enter your alias")
       return
     }
@@ -21,8 +21,6 @@ export default function Referee() {
 
     await setDoc(doc(db, "rooms", code), {
       status: "lobby",
-      createdAt: Date.now(),
-
       users: {
         [auth.currentUser.uid]: {
           name,
@@ -30,18 +28,19 @@ export default function Referee() {
           ready: false,
           joinedAt: Date.now()
         }
-      }
+      },
+      createdAt: Date.now()
     })
 
     navigate(`/room/${code}`)
   }
 
   return (
-    <div style={{ padding: 40 }}>
+    <div style={{ padding: 20 }}>
       <h2>Referee Setup</h2>
 
       <input
-        placeholder="Your alias"
+        placeholder="Referee alias"
         value={name}
         onChange={(e) => setName(e.target.value)}
       />
@@ -49,7 +48,7 @@ export default function Referee() {
       <br /><br />
 
       <button onClick={createRoom}>
-        Create Room
+        Create Draft Room
       </button>
     </div>
   )
